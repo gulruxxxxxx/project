@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QueueLess - live campus wait times</title>
+<style>
+:root{
+  --paper:#f3f5f9; --surface:#ffffff; --ink:#14264f; --muted:#5a6685; --line:#dfe4ee; --soft:#eef1f7;
+  --gold:#cf9b2f; --go:#1a9a5f; --short:#e08a1e; --wait:#d6453d; --closed:#8590a8;
+  --serif:Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--paper:#0f1a33;--surface:#17254a;--ink:#eaf0ff;--muted:#9aa8c9;--line:#2a3b69;--soft:#1d2d58;--go:#35c27f;--short:#f0a13a;--wait:#ff6a60;--closed:#7783a3}
+}
+:root[data-theme="dark"]{--paper:#0f1a33;--surface:#17254a;--ink:#eaf0ff;--muted:#9aa8c9;--line:#2a3b69;--soft:#1d2d58;--go:#35c27f;--short:#f0a13a;--wait:#ff6a60;--closed:#7783a3}
+
+*{box-sizing:border-box}
+html{font-size:100%}
+html.big{font-size:125%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.45;padding-top:env(safe-area-inset-top,0)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.st-go{--c:var(--go)} .st-short{--c:var(--short)} .st-wait{--c:var(--wait)} .st-closed{--c:var(--closed)}
+
+/* ---------- top bar ---------- */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;max-width:1120px;margin:0 auto;padding:1rem 1.25rem}
+.brand{display:flex;align-items:center;gap:.7rem}
+.brand b{font-family:var(--serif);font-size:1.45rem;letter-spacing:-.01em}
+.brand small{color:var(--muted);font-size:.85rem}
+.tools{display:flex;align-items:center;gap:.5rem}
+.live{display:inline-flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--muted);padding:.35rem .7rem;border:1px solid var(--line);border-radius:99px;background:var(--surface)}
+.live i{width:.55rem;height:.55rem;border-radius:50%;background:var(--go);animation:pulse 2s infinite}
+.live.off i{background:var(--wait);animation:none}
+.tool{border:1px solid var(--line);background:var(--surface);border-radius:.6rem;padding:.35rem .75rem;font-size:.85rem}
+.tool:hover{border-color:var(--ink)}
+@keyframes pulse{50%{opacity:.35}}
+
+main{max-width:1120px;margin:0 auto;padding:0 1.25rem 3rem}
+
+/* ---------- hero: the answer, as a sentence ---------- */
+.hero{padding:1.5rem 0 1.25rem}
+.hero h1{font-family:var(--serif);font-weight:700;font-size:clamp(1.9rem,4.6vw,3.1rem);line-height:1.1;letter-spacing:-.02em;margin:0 0 .6rem;max-width:22ch}
+.hero p{margin:0;color:var(--muted);font-size:1.02rem}
+
+/* ---------- lanes ---------- */
+.lanes{display:grid;gap:.75rem}
+.lane{display:grid;grid-template-columns:minmax(10rem,15rem) 1fr minmax(8.5rem,11rem);align-items:center;gap:1.25rem;text-align:left;
+  width:100%;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--c);border-radius:.9rem;padding:1rem 1.25rem}
+.lane:hover{border-color:var(--c)}
+.lane.on{box-shadow:0 0 0 2px var(--c) inset}
+.nm{display:block;font-family:var(--serif);font-size:1.3rem;font-weight:700}
+.mt{display:block;color:var(--muted);font-size:.85rem;margin-top:.15rem}
+.flow{display:flex;align-items:center;gap:.9rem;min-width:0}
+.booths{display:flex;flex-wrap:wrap;align-content:flex-end;gap:3px;width:5.3rem;flex:none}
+.booths i{width:.9rem;height:1.2rem;border-radius:.2rem .2rem 0 0;background:var(--ink);opacity:.85}
+.booths em{font-style:normal;color:var(--wait);font-size:.8rem;font-weight:600}
+.dots{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.dots i{width:.72rem;height:.72rem;border-radius:50%;background:var(--c)}
+.dots i.new{animation:pop .5s ease-out}
+.dots .more{font-size:.8rem;color:var(--muted);margin-left:.25rem;align-self:center}
+.dots .none{font-size:.85rem;color:var(--muted)}
+@keyframes pop{from{transform:scale(0)}60%{transform:scale(1.5)}to{transform:scale(1)}}
+.eta{text-align:right}
+.num{display:block;font-size:2.2rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:var(--c)}
+.num small{font-size:.9rem;font-weight:500;color:var(--muted);margin-left:.2rem}
+.badge{display:inline-block;margin-top:.4rem;font-size:.78rem;font-weight:600;padding:.15rem .6rem;border-radius:99px;
+  color:var(--c);border:1.5px solid var(--c)}
+
+/* ---------- detail panel ---------- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:.9rem;padding:1.25rem 1.4rem}
+.detail{margin-top:1rem}
+.detail>.panel{border-top:6px solid var(--c)}
+.dhead{display:flex;align-items:baseline;gap:.9rem;flex-wrap:wrap;margin-bottom:1rem}
+.dhead h2,.panel h2{font-family:var(--serif);font-size:1.4rem;margin:0}
+.cols{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:1.5rem}
+.cols h3{margin:0 0 .6rem;font-size:.95rem}
+.q{list-style:none;margin:0;padding:0;max-height:15.5rem;overflow:auto}
+.q li{display:grid;grid-template-columns:1.8rem 1fr auto;gap:.5rem;padding:.35rem 0;border-bottom:1px solid var(--line);font-size:.9rem}
+.q li b{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+.q li span small{color:var(--muted);margin-left:.4rem}
+.q li:first-child{font-weight:600}
+.q .rest{display:block;color:var(--muted);border:0;padding-top:.5rem}
+.chart{display:flex;align-items:flex-end;gap:5px;height:9rem;border-bottom:2px solid var(--line);padding-top:.5rem}
+.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;position:relative}
+.bar-h{border-radius:.25rem .25rem 0 0;background:var(--muted);opacity:.5;min-height:3px}
+.col.peak .bar-h{background:var(--wait);opacity:1}
+.col.quiet .bar-h{background:var(--go);opacity:1}
+.col.now::after{content:"";position:absolute;left:-2px;right:-2px;top:0;bottom:-4px;border:2px dashed var(--gold);border-radius:.3rem;pointer-events:none}
+.ticks{display:flex;gap:5px;font-size:.72rem;color:var(--muted);margin-top:.3rem}
+.ticks span{flex:1;text-align:center;font-variant-numeric:tabular-nums}
+.cap{font-size:.88rem;color:var(--muted);margin:.7rem 0 0}
+.cap b{color:var(--ink)}
+.key{display:flex;gap:.9rem;font-size:.78rem;color:var(--muted);margin-top:.4rem;flex-wrap:wrap}
+.key i{display:inline-block;width:.7rem;height:.7rem;border-radius:.15rem;margin-right:.3rem;vertical-align:-1px}
+.empty{padding:1.2rem;background:var(--soft);border-radius:.6rem;color:var(--muted);font-size:.92rem}
+.whatif output{display:block;font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;margin:.5rem 0 .1rem}
+.whatif input[type=range]{width:100%;accent-color:var(--ink)}
+.whatif .row{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+.whatif p{font-size:.88rem;color:var(--muted);margin:.5rem 0 0}
+.whatif code{font-size:.8rem;background:var(--soft);padding:.1rem .35rem;border-radius:.25rem}
+.good{color:var(--go);font-weight:600}
+
+/* ---------- heatmap + feed ---------- */
+.duo{display:grid;grid-template-columns:1.6fr 1fr;gap:1rem;margin-top:1rem}
+.heat{display:grid;gap:4px;margin-top:.8rem;overflow-x:auto}
+.hrow{display:grid;grid-template-columns:8.5rem repeat(var(--n),minmax(1.6rem,1fr));gap:4px;align-items:center;font-size:.85rem}
+.hrow>span:first-child{font-weight:600;white-space:nowrap}
+.hc{height:1.9rem;border-radius:.3rem;background:var(--soft)}
+.hc.nd{background:repeating-linear-gradient(45deg,var(--soft),var(--soft) 4px,transparent 4px,transparent 8px)}
+.hrow.hh{color:var(--muted);font-size:.72rem}
+.hrow.hh span{text-align:center}
+.legend{display:flex;gap:1rem;font-size:.78rem;color:var(--muted);margin-top:.8rem;flex-wrap:wrap}
+.legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:.15rem;margin-right:.3rem;vertical-align:-1px}
+.feed{list-style:none;margin:.8rem 0 0;padding:0;max-height:17rem;overflow:auto}
+.feed li{display:grid;grid-template-columns:4.2rem 1fr;gap:.5rem;padding:.4rem 0;border-bottom:1px solid var(--line);font-size:.88rem}
+.feed time{color:var(--muted);font-variant-numeric:tabular-nums}
+.feed li:first-child{font-weight:600}
+footer{max-width:1120px;margin:0 auto;padding:0 1.25rem 2rem;color:var(--muted);font-size:.85rem}
+
+.offline{padding:2rem;border:2px dashed var(--line);border-radius:.9rem;color:var(--muted);text-align:center}
+.offline b{color:var(--ink)}
+
+@media (max-width:900px){
+  .lane{grid-template-columns:1fr auto;grid-template-areas:"who eta" "flow flow"}
+  .lane .who{grid-area:who}.lane .flow{grid-area:flow}.lane .eta{grid-area:eta}
+  .cols,.duo{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true">
+      <rect width="38" height="38" rx="9" fill="#14264f"/>
+      <rect x="6" y="11" width="6" height="16" rx="1.5" fill="#cf9b2f"/>
+      <circle cx="19" cy="19" r="3.2" fill="#fff"/><circle cx="26" cy="19" r="3.2" fill="#fff" opacity=".7"/><circle cx="33" cy="19" r="0" fill="#fff"/>
+      <circle cx="19" cy="28" r="0"/>
+    </svg>
+    <div><b>QueueLess</b><br><small>Know your wait before you queue</small></div>
+  </div>
+  <div class="tools">
+    <span class="live off" id="live"><i></i><span id="liveText">Waiting for the program</span></span>
+    <button class="tool" id="bigBtn" type="button">Big screen</button>
+    <button class="tool" id="themeBtn" type="button">Theme</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1 id="headline">Connecting to the QueueLess program…</h1>
+    <p id="subline">Start the C++ program and this page fills in by itself.</p>
+  </section>
+  <section class="lanes" id="lanes" aria-label="Campus services"></section>
+  <section class="detail" id="detail" aria-live="polite"></section>
+  <section class="duo">
+    <div class="panel"><h2>Busy hours</h2><div id="heat"></div></div>
+    <div class="panel"><h2>What just happened</h2><ul class="feed" id="feed"></ul></div>
+  </section>
+</main>
+
+<footer>
+  This page only <em>shows</em> the data. Every number is calculated by the C++ program
+  (<code>wait = people × minutes per person ÷ counters</code>) and written to <code>web/data.js</code> after each change.
+</footer>
+
+<script src="data.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(s){ return document.querySelector(s); };
+  var LABEL = {go:"Go now", "short":"Short wait", wait:"Consider waiting", closed:"Closed"};
+  var state = null, lastJson = "", selected = -1, whatIf = null, dragging = false, prevSize = [], prevWait = [];
+
+  function esc(t){ return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function f1(v){ return v < 0 ? "–" : (Math.round(v*10)/10).toFixed(1); }
+  function pad(h){ return (h<10?"0":"")+h; }
+  function calc(people, avg, c){ return c <= 0 ? -1 : people*avg/c; }   // same formula as calcWait() in queue.cpp
+
+  /* ---------- storage-safe preferences ---------- */
+  function pref(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){ return null; } }
+  if (pref("ql-theme")) document.documentElement.setAttribute("data-theme", pref("ql-theme"));
+  if (pref("ql-big")==="1") document.documentElement.classList.add("big");
+  $("#themeBtn").onclick = function(){
+    var el=document.documentElement, dark = el.getAttribute("data-theme")==="dark" ||
+      (!el.getAttribute("data-theme") && matchMedia("(prefers-color-scheme:dark)").matches);
+    var next = dark ? "light" : "dark"; el.setAttribute("data-theme", next); pref("ql-theme", next);
+  };
+  $("#bigBtn").onclick = function(){
+    var on = document.documentElement.classList.toggle("big"); pref("ql-big", on?"1":"0");
+  };
+
+  /* ---------- polling: reload data.js every 2 seconds, no page flicker ---------- */
+  function poll(){
+    var s = document.createElement("script");
+    s.src = "data.js?t=" + Date.now();
+    s.onload = function(){ s.remove(); ingest(window.QL); };
+    s.onerror = function(){ s.remove(); setLive(false, "Program not found"); };
+    document.head.appendChild(s);
+  }
+  function setLive(on, text){
+    $("#live").className = "live" + (on ? "" : " off");
+    $("#liveText").textContent = text;
+  }
+  function ingest(d){
+    if (!d || !d.services) { setLive(false, "Waiting for the program"); return; }
+    var json = JSON.stringify(d);
+    setLive(true, "Live · last change " + d.updated.split(", ")[1]);
+    if (json === lastJson) return;
+    if (dragging) return;                       // do not redraw while the slider is being dragged
+    lastJson = json; state = d;
+    if (selected < 0 || selected >= d.services.length) selected = d.best >= 0 ? d.best : 0;
+    render();
+  }
+
+  /* ---------- drawing ---------- */
+  function render(){ hero(); lanes(); detail(); heat(); feed(); }
+
+  function hero(){
+    var d = state, best = d.best, total = 0, open = 0;
+    d.services.forEach(function(s){ total += s.queueSize; open += s.counters; });
+    if (best < 0) {
+      $("#headline").textContent = "Every counter is closed right now.";
+    } else {
+      var b = d.services[best];
+      $("#headline").textContent = b.wait <= d.goMax
+        ? "Go to " + b.name + " now. No real wait."
+        : "Head to " + b.name + ". The wait is about " + Math.round(b.wait) + " minutes.";
+    }
+    $("#subline").textContent = total + " people are waiting across " + d.services.length +
+      " services, with " + open + " counters open. Tap a service for details.";
+  }
+
+  function lanes(){
+    var d = state, html = "";
+    d.services.forEach(function(s,i){
+      var dots = "", max = 36, shown = Math.min(s.queueSize, max), old = prevSize[i] || 0;
+      for (var k=0;k<shown;k++) dots += '<i' + (prevSize.length && k>=old ? ' class="new"' : '') + '></i>';
+      if (s.queueSize > max) dots += '<span class="more">+' + (s.queueSize-max) + '</span>';
+      if (s.queueSize === 0) dots = '<span class="none">Nobody is waiting</span>';
+      var booths = "";
+      for (var c=0;c<s.counters;c++) booths += "<i></i>";
+      if (s.counters === 0) booths = "<em>closed</em>";
+      html += '<button type="button" class="lane st-'+s.status+(i===selected?' on':'')+'" data-i="'+i+'">' +
+        '<div class="who"><span class="nm">'+esc(s.name)+'</span><span class="mt">'+s.queueSize+' waiting, '+s.counters+
+        (s.counters===1?' counter, ':' counters, ')+f1(s.avg)+' min each</span></div>' +
+        '<div class="flow"><div class="booths" title="open counters">'+booths+'</div><div class="dots">'+dots+'</div></div>' +
+        '<div class="eta"><span class="num" data-i="'+i+'">'+(s.wait<0?'Closed':f1(s.wait)+'<small>min</small>')+'</span>' +
+        '<span class="badge">'+LABEL[s.status]+'</span></div></button>';
+    });
+    $("#lanes").innerHTML = html;
+    // count the wait number up or down smoothly
+    d.services.forEach(function(s,i){
+      var el = document.querySelector('.num[data-i="'+i+'"]');
+      if (el && s.wait >= 0 && prevWait[i] >= 0 && prevWait[i] !== s.wait) tween(el, prevWait[i], s.wait);
+    });
+    prevSize = d.services.map(function(s){return s.queueSize;});
+    prevWait = d.services.map(function(s){return s.wait;});
+    Array.prototype.forEach.call(document.querySelectorAll(".lane"), function(b){
+      b.onclick = function(){ selected = +b.getAttribute("data-i"); whatIf = null; render(); };
+    });
+  }
+
+  function tween(el, from, to){
+    if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+    var t0 = performance.now(), dur = 600;
+    (function step(t){
+      var p = Math.min(1,(t-t0)/dur), v = from + (to-from)*p;
+      el.innerHTML = f1(v) + "<small>min</small>";
+      if (p < 1) requestAnimationFrame(step);
+    })(t0);
+  }
+
+  function detail(){
+    var d = state, s = d.services[selected];
+    var rows = "";
+    s.queue.forEach(function(p,i){
+      rows += '<li><b>'+(i+1)+'</b><span>'+esc(p.n)+'<small>'+esc(p.id)+'</small></span><span>'+
+        (p.eta<0?'–':(i===0?'next':f1(p.eta)+' min'))+'</span></li>';
+    });
+    if (s.queueSize > s.queue.length) rows += '<li class="rest"><span></span><span>+ '+(s.queueSize-s.queue.length)+' more waiting</span></li>';
+    if (s.queueSize === 0) rows = '<li class="rest"><span></span><span>The queue is empty.</span></li>';
+
+    // hourly chart (opening hours only)
+    var chart = "", ticks = "", cap = "", mx = 1, h;
+    for (h=d.open; h<d.close; h++) if (s.hourly[h] > mx) mx = s.hourly[h];
+    if (s.records === 0) {
+      chart = '<div class="empty">No history yet. In the program choose <b>9. Demo tools</b> → <b>Generate a busy day</b>, or serve people from the Staff panel.</div>';
+    } else {
+      var bars = "";
+      for (h=d.open; h<d.close; h++) {
+        var v = s.hourly[h], cls = "col" + (h===s.peak?" peak":"") + (h===s.quiet?" quiet":"") + (h===d.hour?" now":"");
+        bars += '<div class="'+cls+'" title="'+pad(h)+':00 – '+(v<0?'no data':f1(v)+' min')+'"><div class="bar-h" style="height:'+(v<0?0:Math.max(3,v/mx*100))+'%"></div></div>';
+        ticks += '<span>'+h+'</span>';
+      }
+      chart = '<div class="chart">'+bars+'</div><div class="ticks">'+ticks+'</div>' +
+        '<div class="key"><span><i style="background:var(--wait)"></i>busiest</span><span><i style="background:var(--go)"></i>quietest</span>' +
+        '<span><i style="border:2px dashed var(--gold)"></i>now</span></div>';
+      cap = '<p class="cap">Busiest at <b>'+pad(s.peak)+':00</b> ('+f1(s.hourly[s.peak])+' min). Quietest at <b>'+pad(s.quiet)+':00</b> ('+f1(s.hourly[s.quiet])+' min).</p>';
+    }
+
+    var c0 = whatIf !== null ? whatIf : Math.max(1, s.counters);
+    $("#detail").innerHTML = '<div class="panel st-'+s.status+'"><div class="dhead"><h2>'+esc(s.name)+'</h2>' +
+      '<span class="badge" style="color:var(--c);border-color:var(--c)">'+LABEL[s.status]+'</span></div>' +
+      '<div class="cols"><div><h3>Who is in line</h3><ul class="q">'+rows+'</ul></div>' +
+      '<div><h3>A typical day</h3>'+chart+cap+'</div>' +
+      '<div class="whatif"><h3>What if we open more counters?</h3>' +
+      '<div class="row"><span>1</span><span>counters</span><span>'+d.maxCounters+'</span></div>' +
+      '<input id="slider" type="range" min="1" max="'+d.maxCounters+'" value="'+c0+'" aria-label="Number of counters">' +
+      '<output id="wiOut" for="slider"></output><p id="wiTxt"></p></div></div></div>';
+
+    var slider = $("#slider");
+    function update(){
+      var c = +slider.value; whatIf = c;
+      var now = s.wait, after = calc(s.queueSize, s.avg, c), txt = "";
+      $("#wiOut").textContent = after < 0 ? "Closed" : f1(after) + " min";
+      if (c === s.counters) txt = "That is today's setup: " + c + (c===1?" counter":" counters") + ".";
+      else if (now < 0) txt = "With " + c + " counters this service could open.";
+      else if (after < now) txt = '<span class="good">Saves ' + f1(now-after) + ' minutes</span> compared with ' + s.counters + '.';
+      else txt = "Adds " + f1(after-now) + " minutes compared with " + s.counters + ".";
+      if (s.wait > d.shortMax || s.wait < 0) {
+        txt += s.needed > 0 ? " To get under " + d.shortMax + " min you need <b>" + s.needed + "</b> counters." : " Even " + d.maxCounters + " counters can't get below " + d.shortMax + " min.";
+      }
+      txt += " <code>"+s.queueSize+" × "+f1(s.avg)+" ÷ "+c+"</code>";
+      $("#wiTxt").innerHTML = txt;
+    }
+    slider.oninput = update; update();
+    slider.onpointerdown = function(){ dragging = true; };
+    slider.onpointerup = slider.onpointercancel = function(){ dragging = false; };
+  }
+
+  function heat(){
+    var d = state, n = d.close - d.open, html = '<div class="hrow hh" style="--n:'+n+'"><span></span>', h;
+    for (h=d.open; h<d.close; h++) html += "<span>"+h+"</span>";
+    html += "</div>";
+    if (d.historyCount === 0) {
+      $("#heat").innerHTML = '<div class="empty" style="margin-top:.8rem">No history yet. Generate a busy day in the program (menu 9) to see when each service is busy.</div>';
+      return;
+    }
+    d.services.forEach(function(s){
+      html += '<div class="hrow" style="--n:'+n+'"><span>'+esc(s.name)+'</span>';
+      for (var h=d.open; h<d.close; h++){
+        var v = s.hourly[h];
+        if (v < 0) { html += '<span class="hc nd" title="'+pad(h)+':00 – no data"></span>'; continue; }
+        var col = v <= d.goMax ? "--go" : (v <= d.shortMax ? "--short" : "--wait");
+        var pct = Math.min(100, 25 + v/40*75);
+        html += '<span class="hc" title="'+pad(h)+':00 – '+f1(v)+' min" style="background:color-mix(in srgb,var('+col+') '+pct+'%,transparent)"></span>';
+      }
+      html += "</div>";
+    });
+    html += '<div class="legend"><span><i style="background:var(--go)"></i>under '+d.goMax+' min</span>' +
+      '<span><i style="background:var(--short)"></i>up to '+d.shortMax+' min</span><span><i style="background:var(--wait)"></i>longer</span></div>';
+    $("#heat").innerHTML = '<div class="heat">'+html+'</div>';
+  }
+
+  function feed(){
+    var a = state.activity, html = "";
+    a.forEach(function(e){ html += "<li><time>"+esc(e.t)+"</time><span>"+esc(e.text)+"</span></li>"; });
+    $("#feed").innerHTML = html || "<li><span></span><span>Nothing yet.</span></li>";
+  }
+
+  ingest(window.QL);                 // show the data that is already loaded
+  setInterval(poll, 2000);
+})();
+</script>
+</body>
+</html>
